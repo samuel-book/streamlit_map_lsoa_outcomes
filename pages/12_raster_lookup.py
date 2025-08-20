@@ -175,36 +175,8 @@ df_raster = pd.merge(
     suffixes=[None, '_data']
     )
 
+
 # ----- Scaled data -----
-# LSOA names:
-series_lsoa = df_raster['LSOA11CD']
-# Include escape characters \ before the square brackets:
-series_lsoa = series_lsoa.str.replace("\['", '')
-series_lsoa = series_lsoa.str.replace("'\]", '')
-# Convert into dataframe with one LSOA per column:
-df_lsoa_explode = pd.DataFrame(series_lsoa.str.split("', '").values.tolist())
-
-# Proportions:
-series_props = df_raster['area_prop']
-# Include escape characters \ before the square brackets:
-series_props = series_props.str.replace("\[", '')
-series_props = series_props.str.replace("\]", '')
-# Convert into dataframe with one LSOA per column:
-df_props_explode = pd.DataFrame(series_props.str.split(", ").values.tolist()).astype(float)
-
-# Convert LSOA names to data values.
-str_data = '!'.join(series_lsoa.values.flatten())
-for k, v in dict(zip(df_data['LSOA11CD'], df_data[unit1])).items():
-    str_data = str_data.replace(k, str(v))
-series_data = pd.Series(str_data.split('!'))
-df_data_explode = pd.DataFrame(series_data.str.split("', '").values.tolist()).astype(float)
-# Build new dataframe with a single column for scaled data:
-df_raster_scale = (df_data_explode * df_props_explode).sum(axis='columns')
-df_raster_scale = pd.DataFrame(df_raster_scale).rename(columns={0: 'scaled'})
-# Merge in the pixel identifiers:
-df_raster_scale = pd.concat((df_raster_scale, df_raster['i']), axis='columns')
-
-# ----- Convert to 2D array -----
 def convert_df_to_2darray(df_raster, data_col, transform_dict):
     # Make a 1D array with all pixels, not just valid ones:
     raster_arr_maj = np.full(
@@ -218,7 +190,46 @@ def convert_df_to_2darray(df_raster, data_col, transform_dict):
 
 
 raster_arr_maj = convert_df_to_2darray(df_raster, 'majority', transform_dict)
-raster_arr_sca = convert_df_to_2darray(df_raster_scale, 'scaled', transform_dict)
+
+calculate_scaled_arr = st.checkbox('Calculate scaled array')
+if calculate_scaled_arr:
+    # Make a new dataframe. First column contains main LSOA, second
+    # column next LSOA, etc. for the max number of LSOAs in any pixel.
+    # Pixels with fewer LSOA will contain mostly nan.
+
+    # LSOA names:
+    series_lsoa = df_raster['LSOA11CD']
+    # Include escape characters \ before the square brackets:
+    series_lsoa = series_lsoa.str.replace("\['", '')
+    series_lsoa = series_lsoa.str.replace("'\]", '')
+    # Convert into dataframe with one LSOA per column:
+    df_lsoa_explode = pd.DataFrame(series_lsoa.str.split("', '").values.tolist())
+
+    # Proportions:
+    series_props = df_raster['area_prop']
+    # Include escape characters \ before the square brackets:
+    series_props = series_props.str.replace("\[", '')
+    series_props = series_props.str.replace("\]", '')
+    # Convert into dataframe with one LSOA per column:
+    df_props_explode = pd.DataFrame(series_props.str.split(", ").values.tolist()).astype(float)
+
+    # Convert LSOA names to data values.
+    str_data = '!'.join(series_lsoa.values.flatten())
+    for k, v in dict(zip(df_data['LSOA11CD'], df_data[unit1])).items():
+        str_data = str_data.replace(k, str(v))
+    series_data = pd.Series(str_data.split('!'))
+    df_data_explode = pd.DataFrame(series_data.str.split("', '").values.tolist()).astype(float)
+    # Build new dataframe with a single column for scaled data:
+    df_raster_scale = (df_data_explode * df_props_explode).sum(axis='columns')
+    df_raster_scale = pd.DataFrame(df_raster_scale).rename(columns={0: 'scaled'})
+    # Merge in the pixel identifiers:
+    df_raster_scale = pd.concat((df_raster_scale, df_raster['i']), axis='columns')
+
+    # ----- Convert to 2D array -----
+    raster_arr_sca = convert_df_to_2darray(df_raster_scale, 'scaled', transform_dict)
+else:
+    raster_arr_sca = raster_arr_maj
+    subplot_titles[1] = subplot_titles[0]
 
 burned_lhs = raster_arr_maj
 burned_rhs = raster_arr_sca
